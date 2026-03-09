@@ -155,6 +155,14 @@ export function CompanySettings() {
     }
   });
 
+  const unarchiveMutation = useMutation({
+    mutationFn: (companyId: string) => companiesApi.unarchive(companyId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.companies.stats });
+    },
+  });
+
   useEffect(() => {
     setBreadcrumbs([
       { label: selectedCompany?.name ?? "Company", href: "/dashboard" },
@@ -386,9 +394,28 @@ export function CompanySettings() {
         </div>
         <div className="space-y-3 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-4">
           <p className="text-sm text-muted-foreground">
-            Archive this company to hide it from the sidebar. This persists in
-            the database.
+            Archive this company to hide it from the sidebar. Archived companies are automatically deleted after 30 days.
           </p>
+          {selectedCompany.status === "archived" && selectedCompany.archivedAt && (
+            <div className="flex items-center gap-1.5 rounded-md border border-amber-400/60 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              <span>&#9888;&#65039;</span>
+              <span>
+                This company will be automatically deleted in{" "}
+                <strong>
+                  {Math.max(
+                    0,
+                    Math.ceil(
+                      (new Date(selectedCompany.archivedAt).getTime() +
+                        30 * 24 * 60 * 60 * 1000 -
+                        Date.now()) /
+                        (24 * 60 * 60 * 1000),
+                    ),
+                  )}
+                </strong>{" "}
+                days.
+              </span>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <Button
               size="sm"
@@ -400,7 +427,7 @@ export function CompanySettings() {
               onClick={() => {
                 if (!selectedCompanyId) return;
                 const confirmed = window.confirm(
-                  `Archive company "${selectedCompany.name}"? It will be hidden from the sidebar.`
+                  `Archive company "${selectedCompany.name}"? It will be hidden from the sidebar and automatically deleted after 30 days.`,
                 );
                 if (!confirmed) return;
                 const nextCompanyId =
@@ -421,11 +448,32 @@ export function CompanySettings() {
                 ? "Already archived"
                 : "Archive company"}
             </Button>
+            {selectedCompany.status === "archived" && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-green-300 text-green-700 hover:bg-green-50"
+                disabled={unarchiveMutation.isPending}
+                onClick={() => {
+                  if (!selectedCompanyId) return;
+                  unarchiveMutation.mutate(selectedCompanyId);
+                }}
+              >
+                {unarchiveMutation.isPending ? "Unarchiving..." : "Unarchive company"}
+              </Button>
+            )}
             {archiveMutation.isError && (
               <span className="text-xs text-destructive">
                 {archiveMutation.error instanceof Error
                   ? archiveMutation.error.message
                   : "Failed to archive company"}
+              </span>
+            )}
+            {unarchiveMutation.isError && (
+              <span className="text-xs text-destructive">
+                {unarchiveMutation.error instanceof Error
+                  ? unarchiveMutation.error.message
+                  : "Failed to unarchive company"}
               </span>
             )}
           </div>

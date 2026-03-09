@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -55,6 +55,7 @@ export interface IssueFilters {
   projectId?: string;
   labelId?: string;
   q?: string;
+  ready?: boolean;
 }
 
 type IssueRow = typeof issues.$inferSelect;
@@ -474,6 +475,11 @@ export function issueService(db: Db) {
             descriptionContainsMatch,
             commentContainsMatch,
           )!,
+        );
+      }
+      if (filters?.ready) {
+        conditions.push(
+          or(isNull(issues.startDate), lte(issues.startDate, new Date()))!,
         );
       }
       conditions.push(isNull(issues.hiddenAt));

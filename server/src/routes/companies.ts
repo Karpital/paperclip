@@ -166,6 +166,26 @@ export function companyRoutes(db: Db) {
     res.json(company);
   });
 
+  router.post("/:companyId/unarchive", async (req, res) => {
+    assertBoard(req);
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    const company = await svc.unarchive(companyId);
+    if (!company) {
+      res.status(404).json({ error: "Company not found" });
+      return;
+    }
+    await logActivity(db, {
+      companyId,
+      actorType: "user",
+      actorId: req.actor.userId ?? "board",
+      action: "company.unarchived",
+      entityType: "company",
+      entityId: companyId,
+    });
+    res.json(company);
+  });
+
   router.delete("/:companyId", async (req, res) => {
     assertBoard(req);
     const companyId = req.params.companyId as string;

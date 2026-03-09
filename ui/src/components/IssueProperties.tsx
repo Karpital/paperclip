@@ -17,7 +17,8 @@ import { formatDate, cn, projectUrl } from "../lib/utils";
 import { timeAgo } from "../lib/timeAgo";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { User, Hexagon, ArrowUpRight, Tag, Plus, Trash2 } from "lucide-react";
+import { User, Hexagon, ArrowUpRight, Tag, Plus, Trash2, Calendar, X } from "lucide-react";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { AgentIcon } from "./AgentIconPicker";
 
 interface IssuePropertiesProps {
@@ -503,6 +504,26 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
         >
           {projectContent}
         </PropertyPicker>
+
+        <PropertyRow label="Start date">
+          <DateTimePicker
+            variant="property"
+            value={issue.startDate ? new Date(issue.startDate).toISOString().slice(0, 16) : ""}
+            onChange={(v) => onUpdate({ startDate: v ? new Date(v).toISOString() : null })}
+            onClear={() => onUpdate({ startDate: null })}
+            label="Set start date"
+          />
+        </PropertyRow>
+
+        <PropertyRow label="Due date">
+          <DateTimePicker
+            variant="property"
+            value={issue.dueDate ? new Date(issue.dueDate).toISOString().slice(0, 16) : ""}
+            onChange={(v) => onUpdate({ dueDate: v ? new Date(v).toISOString() : null })}
+            onClear={() => onUpdate({ dueDate: null })}
+            label="Set due date"
+          />
+        </PropertyRow>
 
         {issue.parentId && (
           <PropertyRow label="Parent">

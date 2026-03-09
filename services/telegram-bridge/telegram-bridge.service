@@ -1,0 +1,21 @@
+[Unit]
+Description=Paperclip Telegram Bridge Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/leadgeniy/paperclip/services/telegram-bridge
+User=aiagent
+ExecStart=/usr/bin/python3 /root/leadgeniy/paperclip/services/telegram-bridge/bot.py
+Restart=always
+RestartSec=10
+Environment=TG_BOT_TOKEN=7691334084:AAFU6P9TqXjaKXj-qBFl3WxNIMRY2v3RGco
+Environment=TG_CHAT_ID=277524018
+Environment=PAPERCLIP_API_URL=http://127.0.0.1:3100
+Environment=PAPERCLIP_API_KEY=pcp_16aff04038c9a0133dec7e6daa82017ebb2043d0fc3cf772
+Environment=PAPERCLIP_COMPANY_ID=e8fa12a8-1aec-4e99-b8c4-d4e5920750ce
+Environment=PAPERCLIP_BOARD_USER_ID=05d3J5EHZO6khns4EFv2bNw6IO2Hx52W
+Environment=COMPANY_PREFIX=CMP
+
+[Install]
+WantedBy=multi-user.target

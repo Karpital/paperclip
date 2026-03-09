@@ -223,6 +223,9 @@ export function issueRoutes(db: Db, storage: StorageService) {
       return;
     }
 
+    const readyParam = req.query.ready === "true" ? true : undefined;
+    // Auto-enable ready filter when agent queries its own assignments
+    const ready = readyParam ?? (req.actor.type === "agent" && req.query.assigneeAgentId ? true : undefined);
     const result = await svc.list(companyId, {
       status: req.query.status as string | undefined,
       assigneeAgentId: req.query.assigneeAgentId as string | undefined,
@@ -232,6 +235,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
       projectId: req.query.projectId as string | undefined,
       labelId: req.query.labelId as string | undefined,
       q: req.query.q as string | undefined,
+      ready,
     });
     res.json(result);
   });
@@ -421,8 +425,15 @@ export function issueRoutes(db: Db, storage: StorageService) {
     }
 
     const actor = getActorInfo(req);
+    const { startDate: startDateRaw, dueDate: dueDateRaw, ...createFields } = req.body;
+    if (startDateRaw !== undefined) {
+      (createFields as any).startDate = startDateRaw ? new Date(startDateRaw) : null;
+    }
+    if (dueDateRaw !== undefined) {
+      (createFields as any).dueDate = dueDateRaw ? new Date(dueDateRaw) : null;
+    }
     const issue = await svc.create(companyId, {
-      ...req.body,
+      ...createFields,
       createdByAgentId: actor.agentId,
       createdByUserId: actor.actorType === "user" ? actor.actorId : null,
     });
@@ -484,9 +495,15 @@ export function issueRoutes(db: Db, storage: StorageService) {
     }
     if (!(await assertAgentRunCheckoutOwnership(req, res, existing))) return;
 
-    const { comment: commentBody, hiddenAt: hiddenAtRaw, ...updateFields } = req.body;
+    const { comment: commentBody, hiddenAt: hiddenAtRaw, startDate: startDateRaw, dueDate: dueDateRaw, ...updateFields } = req.body;
     if (hiddenAtRaw !== undefined) {
       updateFields.hiddenAt = hiddenAtRaw ? new Date(hiddenAtRaw) : null;
+    }
+    if (startDateRaw !== undefined) {
+      updateFields.startDate = startDateRaw ? new Date(startDateRaw) : null;
+    }
+    if (dueDateRaw !== undefined) {
+      updateFields.dueDate = dueDateRaw ? new Date(dueDateRaw) : null;
     }
     let issue;
     try {
@@ -698,6 +715,16 @@ export function issueRoutes(db: Db, storage: StorageService) {
 
     if (req.actor.type === "agent" && req.actor.agentId !== req.body.agentId) {
       res.status(403).json({ error: "Agent can only checkout as itself" });
+      return;
+    }
+
+    // Block checkout if startDate is in the future (task not yet scheduled to begin)
+    if (issue.startDate && new Date(issue.startDate).getTime() > Date.now()) {
+      res.status(422).json({
+        error: "Issue start date has not arrived yet",
+        startDate: issue.startDate,
+        message: `This issue is scheduled to start at ${new Date(issue.startDate).toISOString()}. Cannot checkout before that time.`,
+      });
       return;
     }
 

@@ -1692,6 +1692,7 @@ export function heartbeatService(db: Db) {
             companyId: issues.companyId,
             executionRunId: issues.executionRunId,
             executionAgentNameKey: issues.executionAgentNameKey,
+            startDate: issues.startDate,
           })
           .from(issues)
           .where(and(eq(issues.id, issueId), eq(issues.companyId, agent.companyId)))
@@ -1704,6 +1705,28 @@ export function heartbeatService(db: Db) {
             source,
             triggerDetail,
             reason: "issue_execution_issue_not_found",
+            payload,
+            status: "skipped",
+            requestedByActorType: opts.requestedByActorType ?? null,
+            requestedByActorId: opts.requestedByActorId ?? null,
+            idempotencyKey: opts.idempotencyKey ?? null,
+            finishedAt: new Date(),
+          });
+          return { kind: "skipped" as const };
+        }
+
+        // Skip wake if issue startDate has not arrived yet
+        if (issue.startDate && new Date(issue.startDate).getTime() > Date.now()) {
+          logger.info(
+            { issueId: issue.id, startDate: issue.startDate, agentId },
+            "Skipping wake for issue: startDate not reached",
+          );
+          await tx.insert(agentWakeupRequests).values({
+            companyId: agent.companyId,
+            agentId,
+            source,
+            triggerDetail,
+            reason: "issue_start_date_not_reached",
             payload,
             status: "skipped",
             requestedByActorType: opts.requestedByActorType ?? null,

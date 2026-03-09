@@ -1,4 +1,4 @@
-import { eq, count } from "drizzle-orm";
+import { eq, count, and, lt } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   companies,
@@ -69,6 +69,37 @@ export function companyService(db: Db) {
     throw new Error("Unable to allocate unique issue prefix");
   }
 
+  async function removeCompany(id: string) {
+    return db.transaction(async (tx) => {
+      // Delete from child tables in dependency order
+      await tx.delete(heartbeatRunEvents).where(eq(heartbeatRunEvents.companyId, id));
+      await tx.delete(agentTaskSessions).where(eq(agentTaskSessions.companyId, id));
+      await tx.delete(heartbeatRuns).where(eq(heartbeatRuns.companyId, id));
+      await tx.delete(agentWakeupRequests).where(eq(agentWakeupRequests.companyId, id));
+      await tx.delete(agentApiKeys).where(eq(agentApiKeys.companyId, id));
+      await tx.delete(agentRuntimeState).where(eq(agentRuntimeState.companyId, id));
+      await tx.delete(issueComments).where(eq(issueComments.companyId, id));
+      await tx.delete(costEvents).where(eq(costEvents.companyId, id));
+      await tx.delete(approvalComments).where(eq(approvalComments.companyId, id));
+      await tx.delete(approvals).where(eq(approvals.companyId, id));
+      await tx.delete(companySecrets).where(eq(companySecrets.companyId, id));
+      await tx.delete(joinRequests).where(eq(joinRequests.companyId, id));
+      await tx.delete(invites).where(eq(invites.companyId, id));
+      await tx.delete(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, id));
+      await tx.delete(companyMemberships).where(eq(companyMemberships.companyId, id));
+      await tx.delete(issues).where(eq(issues.companyId, id));
+      await tx.delete(goals).where(eq(goals.companyId, id));
+      await tx.delete(projects).where(eq(projects.companyId, id));
+      await tx.delete(agents).where(eq(agents.companyId, id));
+      await tx.delete(activityLog).where(eq(activityLog.companyId, id));
+      const rows = await tx
+        .delete(companies)
+        .where(eq(companies.id, id))
+        .returning();
+      return rows[0] ?? null;
+    });
+  }
+
   return {
     list: () => db.select().from(companies),
 
@@ -92,40 +123,39 @@ export function companyService(db: Db) {
     archive: (id: string) =>
       db
         .update(companies)
-        .set({ status: "archived", updatedAt: new Date() })
+        .set({ status: "archived", archivedAt: new Date(), updatedAt: new Date() })
         .where(eq(companies.id, id))
         .returning()
         .then((rows) => rows[0] ?? null),
 
-    remove: (id: string) =>
-      db.transaction(async (tx) => {
-        // Delete from child tables in dependency order
-        await tx.delete(heartbeatRunEvents).where(eq(heartbeatRunEvents.companyId, id));
-        await tx.delete(agentTaskSessions).where(eq(agentTaskSessions.companyId, id));
-        await tx.delete(heartbeatRuns).where(eq(heartbeatRuns.companyId, id));
-        await tx.delete(agentWakeupRequests).where(eq(agentWakeupRequests.companyId, id));
-        await tx.delete(agentApiKeys).where(eq(agentApiKeys.companyId, id));
-        await tx.delete(agentRuntimeState).where(eq(agentRuntimeState.companyId, id));
-        await tx.delete(issueComments).where(eq(issueComments.companyId, id));
-        await tx.delete(costEvents).where(eq(costEvents.companyId, id));
-        await tx.delete(approvalComments).where(eq(approvalComments.companyId, id));
-        await tx.delete(approvals).where(eq(approvals.companyId, id));
-        await tx.delete(companySecrets).where(eq(companySecrets.companyId, id));
-        await tx.delete(joinRequests).where(eq(joinRequests.companyId, id));
-        await tx.delete(invites).where(eq(invites.companyId, id));
-        await tx.delete(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, id));
-        await tx.delete(companyMemberships).where(eq(companyMemberships.companyId, id));
-        await tx.delete(issues).where(eq(issues.companyId, id));
-        await tx.delete(goals).where(eq(goals.companyId, id));
-        await tx.delete(projects).where(eq(projects.companyId, id));
-        await tx.delete(agents).where(eq(agents.companyId, id));
-        await tx.delete(activityLog).where(eq(activityLog.companyId, id));
-        const rows = await tx
-          .delete(companies)
-          .where(eq(companies.id, id))
-          .returning();
-        return rows[0] ?? null;
-      }),
+    unarchive: (id: string) =>
+      db
+        .update(companies)
+        .set({ status: "active", archivedAt: null, updatedAt: new Date() })
+        .where(eq(companies.id, id))
+        .returning()
+        .then((rows) => rows[0] ?? null),
+
+    purgeStaleArchived: async () => {
+      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const stale = await db
+        .select({ id: companies.id })
+        .from(companies)
+        .where(
+          and(
+            eq(companies.status, "archived"),
+            lt(companies.archivedAt, cutoff),
+          ),
+        );
+      const removed: string[] = [];
+      for (const row of stale) {
+        await removeCompany(row.id);
+        removed.push(row.id);
+      }
+      return removed;
+    },
+
+    remove: removeCompany,
 
     stats: () =>
       Promise.all([

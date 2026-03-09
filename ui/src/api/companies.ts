@@ -26,6 +26,7 @@ export const companiesApi = {
     >,
   ) => api.patch<Company>(`/companies/${companyId}`, data),
   archive: (companyId: string) => api.post<Company>(`/companies/${companyId}/archive`, {}),
+  unarchive: (companyId: string) => api.post<Company>(`/companies/${companyId}/unarchive`, {}),
   remove: (companyId: string) => api.delete<{ ok: true }>(`/companies/${companyId}`),
   exportBundle: (companyId: string, data: { include?: { company?: boolean; agents?: boolean } }) =>
     api.post<CompanyPortabilityExportResult>(`/companies/${companyId}/export`, data),

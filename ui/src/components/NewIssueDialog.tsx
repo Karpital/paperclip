@@ -20,6 +20,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import {
   Maximize2,
   Minimize2,
@@ -34,6 +35,9 @@ import {
   Tag,
   Calendar,
   Paperclip,
+  Plus,
+  Trash2,
+  X,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { extractProviderIdWithFallback } from "../lib/model-utils";
@@ -193,6 +197,13 @@ export function NewIssueDialog() {
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [companyOpen, setCompanyOpen] = useState(false);
+  const [labelsOpen, setLabelsOpen] = useState(false);
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
+  const [labelSearch, setLabelSearch] = useState("");
+  const [newLabelName, setNewLabelName] = useState("");
+  const [newLabelColor, setNewLabelColor] = useState("#6366f1");
+  const [startDate, setStartDate] = useState("");
+  const [dueDate, setDueDate] = useState("");
   const descriptionEditorRef = useRef<MarkdownEditorRef>(null);
   const attachInputRef = useRef<HTMLInputElement | null>(null);
   const assigneeSelectorRef = useRef<HTMLButtonElement | null>(null);
@@ -209,6 +220,21 @@ export function NewIssueDialog() {
     queryFn: () => projectsApi.list(effectiveCompanyId!),
     enabled: !!effectiveCompanyId && newIssueOpen,
   });
+  const { data: labels } = useQuery({
+    queryKey: queryKeys.issues.labels(effectiveCompanyId!),
+    queryFn: () => issuesApi.listLabels(effectiveCompanyId!),
+    enabled: !!effectiveCompanyId && newIssueOpen,
+  });
+
+  const createLabel = useMutation({
+    mutationFn: (data: { name: string; color: string }) => issuesApi.createLabel(effectiveCompanyId!, data),
+    onSuccess: async (created) => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.issues.labels(effectiveCompanyId!) });
+      setSelectedLabelIds((prev) => [...prev, created.id]);
+      setNewLabelName("");
+    },
+  });
+
   const { data: session } = useQuery({
     queryKey: queryKeys.auth.session,
     queryFn: () => authApi.getSession(),
@@ -400,6 +426,12 @@ export function NewIssueDialog() {
     setExpanded(false);
     setDialogCompanyId(null);
     setCompanyOpen(false);
+    setSelectedLabelIds([]);
+    setLabelSearch("");
+    setNewLabelName("");
+    setNewLabelColor("#6366f1");
+    setStartDate("");
+    setDueDate("");
   }
 
   function handleCompanyChange(companyId: string) {
@@ -437,6 +469,9 @@ export function NewIssueDialog() {
       ...(assigneeId ? { assigneeAgentId: assigneeId } : {}),
       ...(projectId ? { projectId } : {}),
       ...(assigneeAdapterOverrides ? { assigneeAdapterOverrides } : {}),
+      ...(selectedLabelIds.length > 0 ? { labelIds: selectedLabelIds } : {}),
+      ...(startDate ? { startDate: new Date(startDate).toISOString() } : {}),
+      ...(dueDate ? { dueDate: new Date(dueDate).toISOString() } : {}),
     });
   }
 
@@ -900,11 +935,70 @@ export function NewIssueDialog() {
             </PopoverContent>
           </Popover>
 
-          {/* Labels chip (placeholder) */}
-          <button className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors text-muted-foreground">
-            <Tag className="h-3 w-3" />
-            Labels
-          </button>
+          {/* Labels */}
+          <Popover open={labelsOpen} onOpenChange={(open) => { setLabelsOpen(open); if (!open) setLabelSearch(""); }}>
+            <PopoverTrigger asChild>
+              <button className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors text-muted-foreground">
+                <Tag className="h-3 w-3" />
+                {selectedLabelIds.length > 0 ? `${selectedLabelIds.length} label${selectedLabelIds.length > 1 ? "s" : ""}` : "Labels"}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-1" align="start">
+              <input
+                className="w-full px-2 py-1.5 text-xs bg-transparent outline-none border-b border-border mb-1 placeholder:text-muted-foreground/50"
+                placeholder="Search labels..."
+                value={labelSearch}
+                onChange={(e) => setLabelSearch(e.target.value)}
+                autoFocus
+              />
+              <div className="max-h-44 overflow-y-auto overscroll-contain space-y-0.5">
+                {(labels ?? [])
+                  .filter((label) => !labelSearch.trim() || label.name.toLowerCase().includes(labelSearch.toLowerCase()))
+                  .map((label) => {
+                    const selected = selectedLabelIds.includes(label.id);
+                    return (
+                      <button
+                        key={label.id}
+                        className={cn(
+                          "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 text-left",
+                          selected && "bg-accent"
+                        )}
+                        onClick={() => setSelectedLabelIds((prev) =>
+                          selected ? prev.filter((id) => id !== label.id) : [...prev, label.id]
+                        )}
+                      >
+                        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: label.color }} />
+                        <span className="truncate">{label.name}</span>
+                      </button>
+                    );
+                  })}
+              </div>
+              <div className="mt-2 border-t border-border pt-2 space-y-1">
+                <div className="flex items-center gap-1">
+                  <input
+                    className="h-7 w-7 p-0 rounded bg-transparent"
+                    type="color"
+                    value={newLabelColor}
+                    onChange={(e) => setNewLabelColor(e.target.value)}
+                  />
+                  <input
+                    className="flex-1 px-2 py-1.5 text-xs bg-transparent outline-none rounded placeholder:text-muted-foreground/50"
+                    placeholder="New label"
+                    value={newLabelName}
+                    onChange={(e) => setNewLabelName(e.target.value)}
+                  />
+                </div>
+                <button
+                  className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 text-xs rounded border border-border hover:bg-accent/50 disabled:opacity-50"
+                  disabled={!newLabelName.trim() || createLabel.isPending}
+                  onClick={() => createLabel.mutate({ name: newLabelName.trim(), color: newLabelColor })}
+                >
+                  <Plus className="h-3 w-3" />
+                  {createLabel.isPending ? "Creating…" : "Create label"}
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
 
           {/* Attach image chip */}
           <input
@@ -923,24 +1017,58 @@ export function NewIssueDialog() {
             {uploadDescriptionImage.isPending ? "Uploading..." : "Image"}
           </button>
 
+          {/* Start date */}
+          {startDate ? (
+            <DateTimePicker
+              value={startDate}
+              onChange={setStartDate}
+              onClear={() => setStartDate("")}
+              variant="chip"
+              label="Start"
+            />
+          ) : null}
+
+          {/* Due date */}
+          {dueDate ? (
+            <DateTimePicker
+              value={dueDate}
+              onChange={setDueDate}
+              onClear={() => setDueDate("")}
+              variant="chip"
+              label="Due"
+            />
+          ) : null}
+
           {/* More (dates) */}
-          <Popover open={moreOpen} onOpenChange={setMoreOpen}>
-            <PopoverTrigger asChild>
-              <button className="inline-flex items-center justify-center rounded-md border border-border p-1 text-xs hover:bg-accent/50 transition-colors text-muted-foreground">
-                <MoreHorizontal className="h-3 w-3" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-44 p-1" align="start">
-              <button className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 text-muted-foreground">
-                <Calendar className="h-3 w-3" />
-                Start date
-              </button>
-              <button className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 text-muted-foreground">
-                <Calendar className="h-3 w-3" />
-                Due date
-              </button>
-            </PopoverContent>
-          </Popover>
+          {(!startDate || !dueDate) && (
+            <Popover open={moreOpen} onOpenChange={setMoreOpen}>
+              <PopoverTrigger asChild>
+                <button className="inline-flex items-center justify-center rounded-md border border-border p-1 text-xs hover:bg-accent/50 transition-colors text-muted-foreground">
+                  <MoreHorizontal className="h-3 w-3" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-44 p-1" align="start">
+                {!startDate && (
+                  <button
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 text-muted-foreground"
+                    onClick={() => { setStartDate(new Date().toISOString().slice(0, 16)); setMoreOpen(false); }}
+                  >
+                    <Calendar className="h-3 w-3" />
+                    Start date
+                  </button>
+                )}
+                {!dueDate && (
+                  <button
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 text-muted-foreground"
+                    onClick={() => { setDueDate(new Date().toISOString().slice(0, 16)); setMoreOpen(false); }}
+                  >
+                    <Calendar className="h-3 w-3" />
+                    Due date
+                  </button>
+                )}
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
 
         {/* Footer */}

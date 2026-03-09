@@ -11,6 +11,7 @@ export interface Company {
   spentMonthlyCents: number;
   requireBoardApprovalForNewAgents: boolean;
   brandColor: string | null;
+  archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

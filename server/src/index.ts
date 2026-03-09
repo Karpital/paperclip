@@ -24,7 +24,7 @@ import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { logger } from "./middleware/logger.js";
 import { setupLiveEventsWebSocketServer } from "./realtime/live-events-ws.js";
-import { heartbeatService } from "./services/index.js";
+import { companyService, heartbeatService } from "./services/index.js";
 import { createStorageServiceFromConfig } from "./storage/index.js";
 import { printStartupBanner } from "./startup-banner.js";
 import { getBoardClaimWarningUrl, initializeBoardClaimChallenge } from "./board-claim.js";
@@ -323,9 +323,10 @@ if (config.databaseUrl) {
       password: "paperclip",
       port,
       persistent: true,
+      createPostgresUser: process.getuid?.() === 0,
       onLog: appendEmbeddedPostgresLog,
       onError: appendEmbeddedPostgresLog,
-    });
+    } as ConstructorParameters<EmbeddedPostgresCtor>[0] & { createPostgresUser?: boolean });
 
     if (!clusterAlreadyInitialized) {
       try {
@@ -511,6 +512,24 @@ if (config.heartbeatSchedulerEnabled) {
         logger.error({ err }, "periodic reap of orphaned heartbeat runs failed");
       });
   }, config.heartbeatSchedulerIntervalMs);
+}
+
+// Purge archived companies older than 30 days — runs once per day
+{
+  const companySvc = companyService(db as any);
+  const PURGE_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+  setInterval(() => {
+    void companySvc
+      .purgeStaleArchived()
+      .then((removed) => {
+        if (removed.length > 0) {
+          logger.info({ removedCompanyIds: removed }, `Purged ${removed.length} stale archived companies`);
+        }
+      })
+      .catch((err) => {
+        logger.error({ err }, "Failed to purge stale archived companies");
+      });
+  }, PURGE_INTERVAL_MS);
 }
 
 if (config.databaseBackupEnabled) {
