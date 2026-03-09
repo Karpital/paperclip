@@ -338,11 +338,11 @@ export function CompanyRail() {
                 </span>
               </button>
             </PopoverTrigger>
-            <PopoverContent side="right" align="end" className="w-80 p-3">
-              <div className="text-xs font-medium text-muted-foreground mb-2 px-1">
+            <PopoverContent side="right" align="end" className="w-96 p-3">
+              <div className="text-xs font-medium text-muted-foreground mb-3 px-1">
                 Archived companies
               </div>
-              <div className="space-y-1.5 max-h-72 overflow-y-auto">
+              <div className="space-y-3 max-h-96 overflow-y-auto">
                 {archivedCompanies.map((company) => {
                   const daysLeft = company.archivedAt
                     ? Math.max(
@@ -358,35 +358,51 @@ export function CompanyRail() {
                   return (
                     <div
                       key={company.id}
-                      className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-muted/50"
+                      className="rounded-lg border border-border p-3 space-y-2.5"
                     >
-                      <div className="shrink-0 opacity-50">
-                        <CompanyPatternIcon
-                          companyName={company.name}
-                          brandColor={company.brandColor}
-                          className="rounded-[10px] !w-7 !h-7"
-                        />
+                      {/* Header: icon + name + days left */}
+                      <div className="flex items-start gap-2.5">
+                        <div className="shrink-0 opacity-60">
+                          <CompanyPatternIcon
+                            companyName={company.name}
+                            brandColor={company.brandColor}
+                            className="rounded-[10px] !w-9 !h-9"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">{company.name}</div>
+                          {company.description && (
+                            <div className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                              {company.description}
+                            </div>
+                          )}
+                          {company.archiveReason && (
+                            <div className="text-xs text-amber-600 mt-1">
+                              Reason: {company.archiveReason}
+                            </div>
+                          )}
+                          {daysLeft !== null && (
+                            <div className="text-[10px] text-muted-foreground mt-1">
+                              Auto-delete in {daysLeft} day{daysLeft !== 1 ? "s" : ""}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm truncate">{company.name}</div>
-                        {daysLeft !== null && (
-                          <div className="text-[10px] text-muted-foreground">
-                            Auto-delete in {daysLeft}d
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-0.5 shrink-0">
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-2">
                         <button
-                          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                          className="group/btn flex-1 flex items-center justify-center gap-1.5 h-9 rounded-md border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 hover:border-green-400 transition-colors disabled:opacity-50"
                           disabled={unarchiveMutation.isPending}
                           onClick={() => unarchiveMutation.mutate(company.id)}
-                          title="Unarchive"
-                          aria-label={`Unarchive ${company.name}`}
+                          aria-label={`Restore ${company.name}`}
                         >
-                          <ArchiveRestore className="h-3.5 w-3.5" />
+                          <ArchiveRestore className="h-4 w-4" />
+                          <span className="text-xs font-medium hidden group-hover/btn:inline">
+                            Restore
+                          </span>
                         </button>
                         <button
-                          className="p-1.5 rounded hover:bg-red-100 text-muted-foreground hover:text-red-600 transition-colors"
+                          className="group/btn flex-1 flex items-center justify-center gap-1.5 h-9 rounded-md border border-red-300 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-400 transition-colors disabled:opacity-50"
                           disabled={removeMutation.isPending}
                           onClick={() => {
                             const confirmed = window.confirm(
@@ -394,10 +410,12 @@ export function CompanyRail() {
                             );
                             if (confirmed) removeMutation.mutate(company.id);
                           }}
-                          title="Delete forever"
                           aria-label={`Delete ${company.name} forever`}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Trash2 className="h-4 w-4" />
+                          <span className="text-xs font-medium hidden group-hover/btn:inline">
+                            Delete forever
+                          </span>
                         </button>
                       </div>
                     </div>

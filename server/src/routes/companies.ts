@@ -150,7 +150,8 @@ export function companyRoutes(db: Db) {
     assertBoard(req);
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
-    const company = await svc.archive(companyId);
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() || undefined : undefined;
+    const company = await svc.archive(companyId, reason);
     if (!company) {
       res.status(404).json({ error: "Company not found" });
       return;

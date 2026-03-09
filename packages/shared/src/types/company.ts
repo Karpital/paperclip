@@ -12,6 +12,7 @@ export interface Company {
   requireBoardApprovalForNewAgents: boolean;
   brandColor: string | null;
   archivedAt: Date | null;
+  archiveReason: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

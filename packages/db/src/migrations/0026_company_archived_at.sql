@@ -1,1 +1,1 @@
-ALTER TABLE "companies" ADD COLUMN "archived_at" timestamp with time zone;
+ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "archived_at" timestamp with time zone;

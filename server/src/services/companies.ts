@@ -120,10 +120,10 @@ export function companyService(db: Db) {
         .returning()
         .then((rows) => rows[0] ?? null),
 
-    archive: (id: string) =>
+    archive: (id: string, reason?: string) =>
       db
         .update(companies)
-        .set({ status: "archived", archivedAt: new Date(), updatedAt: new Date() })
+        .set({ status: "archived", archivedAt: new Date(), archiveReason: reason ?? null, updatedAt: new Date() })
         .where(eq(companies.id, id))
         .returning()
         .then((rows) => rows[0] ?? null),

@@ -137,11 +137,13 @@ export function CompanySettings() {
   const archiveMutation = useMutation({
     mutationFn: ({
       companyId,
-      nextCompanyId
+      nextCompanyId,
+      reason
     }: {
       companyId: string;
       nextCompanyId: string | null;
-    }) => companiesApi.archive(companyId).then(() => ({ nextCompanyId })),
+      reason?: string;
+    }) => companiesApi.archive(companyId, reason).then(() => ({ nextCompanyId })),
     onSuccess: async ({ nextCompanyId }) => {
       if (nextCompanyId) {
         setSelectedCompanyId(nextCompanyId);
@@ -426,10 +428,10 @@ export function CompanySettings() {
               }
               onClick={() => {
                 if (!selectedCompanyId) return;
-                const confirmed = window.confirm(
-                  `Archive company "${selectedCompany.name}"? It will be hidden from the sidebar and automatically deleted after 30 days.`,
+                const reason = window.prompt(
+                  `Archive company "${selectedCompany.name}"?\nIt will be hidden from the sidebar and automatically deleted after 30 days.\n\nOptional: enter a reason for archiving (or leave empty):`,
                 );
-                if (!confirmed) return;
+                if (reason === null) return; // user cancelled
                 const nextCompanyId =
                   companies.find(
                     (company) =>
@@ -438,7 +440,8 @@ export function CompanySettings() {
                   )?.id ?? null;
                 archiveMutation.mutate({
                   companyId: selectedCompanyId,
-                  nextCompanyId
+                  nextCompanyId,
+                  reason: reason.trim() || undefined
                 });
               }}
             >
