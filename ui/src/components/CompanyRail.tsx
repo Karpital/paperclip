@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Archive, ArchiveRestore, Paperclip, Plus, Trash2 } from "lucide-react";
-import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import { Archive, ArchiveRestore, ChevronDown, Paperclip, Plus, Trash2 } from "lucide-react";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
   closestCenter,
@@ -23,6 +23,8 @@ import { queryKeys } from "../lib/queryKeys";
 import { sidebarBadgesApi } from "../api/sidebarBadges";
 import { heartbeatsApi } from "../api/heartbeats";
 import { companiesApi } from "../api/companies";
+import { agentsApi } from "../api/agents";
+import { issuesApi } from "../api/issues";
 import {
   Tooltip,
   TooltipContent,
@@ -154,6 +156,224 @@ function SortableCompanyItem({
         </TooltipContent>
       </Tooltip>
     </div>
+  );
+}
+
+function ArchivedCompanyCard({
+  company,
+  unarchiveMutation,
+  removeMutation,
+}: {
+  company: Company;
+  unarchiveMutation: { isPending: boolean; mutate: (id: string) => void };
+  removeMutation: { isPending: boolean; mutate: (id: string) => void };
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const daysLeft = company.archivedAt
+    ? Math.max(
+        0,
+        Math.ceil(
+          (new Date(company.archivedAt).getTime() +
+            30 * 24 * 60 * 60 * 1000 -
+            Date.now()) /
+            (24 * 60 * 60 * 1000),
+        ),
+      )
+    : null;
+
+  // Lazy-load agents and issues only when expanded
+  const agentsQuery = useQuery({
+    queryKey: ["archived-agents", company.id],
+    queryFn: () => agentsApi.list(company.id),
+    enabled: expanded,
+  });
+  const issuesQuery = useQuery({
+    queryKey: ["archived-issues", company.id],
+    queryFn: () => issuesApi.list(company.id),
+    enabled: expanded,
+  });
+
+  const isLoading = expanded && (agentsQuery.isLoading || issuesQuery.isLoading);
+
+  return (
+    <div className="rounded-lg border border-border p-3 space-y-2">
+      {/* Header */}
+      <div className="flex items-start gap-2.5">
+        <div className="shrink-0 opacity-60">
+          <CompanyPatternIcon
+            companyName={company.name}
+            brandColor={company.brandColor}
+            className="rounded-[10px] !w-9 !h-9"
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium truncate">{company.name}</div>
+          {daysLeft !== null && (
+            <div className="text-[10px] text-muted-foreground mt-0.5">
+              Auto-delete in {daysLeft} day{daysLeft !== 1 ? "s" : ""}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Collapsible description toggle */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors w-full"
+      >
+        <ChevronDown
+          className={cn(
+            "h-3 w-3 shrink-0 transition-transform duration-150",
+            expanded && "rotate-180",
+          )}
+        />
+        <span>Description</span>
+      </button>
+
+      {/* Expanded content */}
+      {expanded && (
+        <div className="rounded-md bg-muted/40 px-2.5 py-2 text-xs text-muted-foreground space-y-2">
+          {/* Company description */}
+          {company.description && (
+            <p className="leading-relaxed">
+              {company.description.length > 400
+                ? company.description.slice(0, 400) + "…"
+                : company.description}
+            </p>
+          )}
+
+          {/* Archive reason */}
+          {company.archiveReason && (
+            <p className="text-amber-600">
+              Archive reason: {company.archiveReason}
+            </p>
+          )}
+
+          {isLoading ? (
+            <p className="text-[10px] italic">Loading...</p>
+          ) : (
+            <>
+              {/* Agents */}
+              {agentsQuery.data && agentsQuery.data.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-medium text-muted-foreground/70 uppercase mb-0.5">
+                    Agents ({agentsQuery.data.length})
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {agentsQuery.data.slice(0, 8).map((agent) => (
+                      <span
+                        key={agent.id}
+                        className="inline-flex items-center rounded-full bg-background px-1.5 py-0.5 text-[10px] border border-border"
+                      >
+                        {agent.name}
+                      </span>
+                    ))}
+                    {agentsQuery.data.length > 8 && (
+                      <span className="text-[10px] text-muted-foreground/60">
+                        +{agentsQuery.data.length - 8} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Recent issues */}
+              {issuesQuery.data && issuesQuery.data.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-medium text-muted-foreground/70 uppercase mb-0.5">
+                    Recent issues ({issuesQuery.data.length})
+                  </div>
+                  <ul className="space-y-0.5">
+                    {issuesQuery.data.slice(0, 5).map((issue) => (
+                      <li key={issue.id} className="text-[11px] truncate">
+                        <span className={cn(
+                          "inline-block w-1.5 h-1.5 rounded-full mr-1",
+                          issue.status === "done" ? "bg-green-500" :
+                          issue.status === "in_progress" ? "bg-blue-500" :
+                          "bg-muted-foreground/40",
+                        )} />
+                        {issue.title}
+                      </li>
+                    ))}
+                    {issuesQuery.data.length > 5 && (
+                      <li className="text-[10px] text-muted-foreground/60">
+                        +{issuesQuery.data.length - 5} more issues
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              {/* Fallback if nothing */}
+              {(!agentsQuery.data || agentsQuery.data.length === 0) &&
+                (!issuesQuery.data || issuesQuery.data.length === 0) &&
+                !company.description && (
+                  <p className="italic">No additional info available.</p>
+                )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex items-center gap-2">
+        <button
+          className="group/btn flex-1 flex items-center justify-center gap-1.5 h-9 rounded-md border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 hover:border-green-400 transition-colors disabled:opacity-50"
+          disabled={unarchiveMutation.isPending}
+          onClick={() => unarchiveMutation.mutate(company.id)}
+          aria-label={`Restore ${company.name}`}
+        >
+          <ArchiveRestore className="h-4 w-4" />
+          <span className="text-xs font-medium hidden group-hover/btn:inline">
+            Restore
+          </span>
+        </button>
+        <button
+          className="group/btn flex-1 flex items-center justify-center gap-1.5 h-9 rounded-md border border-red-300 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-400 transition-colors disabled:opacity-50"
+          disabled={removeMutation.isPending}
+          onClick={() => {
+            const confirmed = window.confirm(
+              `Permanently delete "${company.name}"? This will remove all agents, issues, projects, and data. This cannot be undone.`,
+            );
+            if (confirmed) removeMutation.mutate(company.id);
+          }}
+          aria-label={`Delete ${company.name} forever`}
+        >
+          <Trash2 className="h-4 w-4" />
+          <span className="text-xs font-medium hidden group-hover/btn:inline">
+            Delete forever
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ArchivedPopoverContent({
+  companies,
+  unarchiveMutation,
+  removeMutation,
+}: {
+  companies: Company[];
+  unarchiveMutation: { isPending: boolean; mutate: (id: string) => void };
+  removeMutation: { isPending: boolean; mutate: (id: string) => void };
+}) {
+  return (
+    <PopoverContent side="right" align="end" className="w-96 p-3">
+      <div className="text-xs font-medium text-muted-foreground mb-3 px-1">
+        Archived companies
+      </div>
+      <div className="space-y-3 max-h-[28rem] overflow-y-auto">
+        {companies.map((company) => (
+          <ArchivedCompanyCard
+            key={company.id}
+            company={company}
+            unarchiveMutation={unarchiveMutation}
+            removeMutation={removeMutation}
+          />
+        ))}
+      </div>
+    </PopoverContent>
   );
 }
 
@@ -338,91 +558,11 @@ export function CompanyRail() {
                 </span>
               </button>
             </PopoverTrigger>
-            <PopoverContent side="right" align="end" className="w-96 p-3">
-              <div className="text-xs font-medium text-muted-foreground mb-3 px-1">
-                Archived companies
-              </div>
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {archivedCompanies.map((company) => {
-                  const daysLeft = company.archivedAt
-                    ? Math.max(
-                        0,
-                        Math.ceil(
-                          (new Date(company.archivedAt).getTime() +
-                            30 * 24 * 60 * 60 * 1000 -
-                            Date.now()) /
-                            (24 * 60 * 60 * 1000),
-                        ),
-                      )
-                    : null;
-                  return (
-                    <div
-                      key={company.id}
-                      className="rounded-lg border border-border p-3 space-y-2.5"
-                    >
-                      {/* Header: icon + name + days left */}
-                      <div className="flex items-start gap-2.5">
-                        <div className="shrink-0 opacity-60">
-                          <CompanyPatternIcon
-                            companyName={company.name}
-                            brandColor={company.brandColor}
-                            className="rounded-[10px] !w-9 !h-9"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium truncate">{company.name}</div>
-                          {company.description && (
-                            <div className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                              {company.description}
-                            </div>
-                          )}
-                          {company.archiveReason && (
-                            <div className="text-xs text-amber-600 mt-1">
-                              Reason: {company.archiveReason}
-                            </div>
-                          )}
-                          {daysLeft !== null && (
-                            <div className="text-[10px] text-muted-foreground mt-1">
-                              Auto-delete in {daysLeft} day{daysLeft !== 1 ? "s" : ""}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      {/* Action buttons */}
-                      <div className="flex items-center gap-2">
-                        <button
-                          className="group/btn flex-1 flex items-center justify-center gap-1.5 h-9 rounded-md border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 hover:border-green-400 transition-colors disabled:opacity-50"
-                          disabled={unarchiveMutation.isPending}
-                          onClick={() => unarchiveMutation.mutate(company.id)}
-                          aria-label={`Restore ${company.name}`}
-                        >
-                          <ArchiveRestore className="h-4 w-4" />
-                          <span className="text-xs font-medium hidden group-hover/btn:inline">
-                            Restore
-                          </span>
-                        </button>
-                        <button
-                          className="group/btn flex-1 flex items-center justify-center gap-1.5 h-9 rounded-md border border-red-300 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-400 transition-colors disabled:opacity-50"
-                          disabled={removeMutation.isPending}
-                          onClick={() => {
-                            const confirmed = window.confirm(
-                              `Permanently delete "${company.name}"? This will remove all agents, issues, projects, and data. This cannot be undone.`,
-                            );
-                            if (confirmed) removeMutation.mutate(company.id);
-                          }}
-                          aria-label={`Delete ${company.name} forever`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          <span className="text-xs font-medium hidden group-hover/btn:inline">
-                            Delete forever
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </PopoverContent>
+            <ArchivedPopoverContent
+              companies={archivedCompanies}
+              unarchiveMutation={unarchiveMutation}
+              removeMutation={removeMutation}
+            />
           </Popover>
         </div>
       )}
